@@ -1,6 +1,3 @@
-'2018-08-11 0.01 (forum uploaded)
-'2018-09-02 0.02 (Key Fraction)
-
 VGMFILE$="test.vgm"
 'VGMFILE$="fz_boss.vgm"
 'VGMFILE$="fz_shop.vgm"
@@ -9,6 +6,8 @@ VGMFILE$="test.vgm"
 dim YM2151oct[8]
 dim YM2151noteno[8]
 dim YM2151kf[8]
+dim YM2151algo[8]
+dim YM2151tl[8,4]
 dim noteno[8]
 
 '0:HDMI 1:Jack
@@ -83,6 +82,7 @@ def vgmplay(vgmfile)
    'YM2151, write value dd to register aa
    aa=vgm[fpos]:inc fpos
    dd=vgm[fpos]:inc fpos
+   'print hex$(fpos), hex$(cmd), hex$(aa), hex$(dd)
    subYM2151 cmd,aa,dd
   else
    print "Undef fpos:"+str$(fpos)+" &H"+hex$(cmd)
@@ -122,23 +122,35 @@ def subYM2151 cmd,aa,dd
   'key-on/off
   kon=(dd and &h78)>>3
   ch=dd and &h07
-  'for debug
-  if ch==0 then
-   if kon then
-    print "KeyOn :",kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch]:'input a$
-   else
-    print "KeyOff:",kon, ch:'input a$
-   endif
-  endif
 
+  'tl -> vol
+  if 0 <= YM2151algo[ch] and YM2151algo[ch] <= 3 then
+   vv=(127-YM2151tl[ch,3])/2
+  elseif 4 == YM2151algo[ch] then
+   vv=((127-YM2151tl[ch,1])+(127-YM2151tl[ch,3]))/2
+  elseif 5 <= YM2151algo[ch] and YM2151algo[ch] <= 6 then
+   vv=((127-YM2151tl[ch,1])+(127-YM2151tl[ch,2])+(127-YM2151tl[ch,3]))/2
+  else
+   vv=((127-YM2151tl[ch,0])+(127-YM2151tl[ch,1])+(127-YM2151tl[ch,2])+(127-YM2151tl[ch,3]))/2
+  endif
   'ima wa ch0 dake saisei suru
   'if kon then
-  if ch==0 and kon then
+  if ch==0 and kon==&h0f then
    freq ch, noteno[ch]+(YM2151kf[ch]/127)
-   vol ch, 255
+   'vol ch, 255
+   vol ch,vv
   else
    vol ch,0
   endif
+  'for debug
+  if ch==0 then
+   if kon==&h0f then
+    print "KeyOn :",kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vv:'input a$
+   else
+    'print "KeyOff:", kon, ch:'input a$
+   endif
+  endif
+
  elseif &h28 <= aa and aa <= &h2f then
   'KeyCode(Octave(3bit)+Note(4bit)
   ch=aa-&h28
@@ -149,6 +161,18 @@ def subYM2151 cmd,aa,dd
   'Key Fraction(6bit)
   ch=aa-&h30
   YM2151kf[ch]=(dd and &hfc)>>2
+ elseif &h20 <= aa and aa <= &h27 then
+  'Algorithm(3bit)
+  ch=aa-&h20
+  YM2151algo[ch]=(dd and &h07)
+  if ch==0 then print "YM2151algo[", ch, "]=", YM2151algo[ch]
+ elseif &h60 <= aa and aa <= &h7f then
+  'Total Level(7bit)
+  ch=(aa-&h60) mod 8
+  op=(aa-&h60) div 8
+  if op==1 then op=2 elseif op==2 then op=1
+  YM2151tl[ch,op]=(dd and &h7f)
+  if ch==0 then print "YM2151tl[", ch, "][", op, "]=", YM2151tl[ch,op]
  endif
 end
 
