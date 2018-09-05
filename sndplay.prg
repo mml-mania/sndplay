@@ -1,3 +1,6 @@
+'2018-08-11 0.01 (forum uploaded)
+'2018-09-02 0.02 (Key Fraction)
+
 VGMFILE$="test.vgm"
 'VGMFILE$="fz_boss.vgm"
 'VGMFILE$="fz_shop.vgm"
@@ -5,6 +8,7 @@ VGMFILE$="test.vgm"
 'hairetsu wo subroutine ni watasu houhou ga wakattara naosu
 dim YM2151oct[8]
 dim YM2151noteno[8]
+dim YM2151kf[8]
 dim noteno[8]
 
 '0:HDMI 1:Jack
@@ -53,21 +57,30 @@ def vgmplay(vgmfile)
   cmd=vgm[fpos]:inc fpos
   'print cmd
   if &h70 <= cmd && cmd <=&h7f then
-   vgmwait(cmd-&h70+1)
+   'wait n+1 samples
+   wait=cmd-&h70+1
+   inc vgmsmp, wait
+   vgmwait(wait)
   elseif cmd==&h61 then
+   'Wait n samples
    aa=vgm[fpos]:inc fpos
    dd=vgm[fpos]:inc fpos
    wait=aa+dd*256
+   inc vgmsmp, wait
    vgmwait(wait)
   elseif cmd==&h62 then
+   'wait 735 samples
    inc vgmsmp, 735
    vgmwait(735)
   elseif cmd==&h63 then
+   'wait 882 samples
    inc vgmsmp, 882
    vgmwait(882)
   elseif cmd==&h66 then
+   'end of sound data
    break
   elseif cmd==&h54 then
+   'YM2151, write value dd to register aa
    aa=vgm[fpos]:inc fpos
    dd=vgm[fpos]:inc fpos
    subYM2151 cmd,aa,dd
@@ -112,7 +125,7 @@ def subYM2151 cmd,aa,dd
   'for debug
   if ch==0 then
    if kon then
-    print "KeyOn :",kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]):'input a$
+    print "KeyOn :",kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch]:'input a$
    else
     print "KeyOff:",kon, ch:'input a$
    endif
@@ -121,16 +134,21 @@ def subYM2151 cmd,aa,dd
   'ima wa ch0 dake saisei suru
   'if kon then
   if ch==0 and kon then
-   freq ch, noteno[ch]
+   freq ch, noteno[ch]+(YM2151kf[ch]/127)
    vol ch, 255
   else
    vol ch,0
   endif
  elseif &h28 <= aa and aa <= &h2f then
+  'KeyCode(Octave(3bit)+Note(4bit)
   ch=aa-&h28
   YM2151oct[ch]=(dd and &h70)>>4
   YM2151noteno[ch]=dd and &h0F
   noteno[ch]=12*YM2151oct[ch]+YM2151noteno[ch] - (YM2151noteno[ch]>>2)
+ elseif &h30 <= aa and aa <= &h37 then
+  'Key Fraction(6bit)
+  ch=aa-&h30
+  YM2151kf[ch]=(dd and &hfc)>>2
  endif
 end
 
