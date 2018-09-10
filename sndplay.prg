@@ -8,6 +8,8 @@ dim YM2151noteno[8]
 dim YM2151kf[8]
 dim YM2151algo[8]
 dim YM2151tl[8,4]
+dim keyon[8]
+dim vbuf[8]
 dim noteno[8]
 
 '0:HDMI 1:Jack
@@ -83,7 +85,7 @@ def vgmplay(vgmfile)
    aa=vgm[fpos]:inc fpos
    dd=vgm[fpos]:inc fpos
    'print hex$(fpos), hex$(cmd), hex$(aa), hex$(dd)
-   subYM2151 cmd,aa,dd
+   subYM2151 cmd,aa,dd,fpos-3
   elseif cmd==&h4f or cmd==&h50 then
    'not use(psg)
    inc fpos
@@ -131,36 +133,27 @@ def vgmwait samples
  usleep samples/44.100*1000
 end
 
-def subYM2151 cmd,aa,dd
+def subYM2151 cmd,aa,dd,fpos
  'print "YM2151:",cmd,aa,dd:input a$
  if aa == &h08 then
   'key-on/off
   kon=(dd and &h78)>>3
   ch=dd and &h07
 
-  'tl -> vol
-  if 0 <= YM2151algo[ch] and YM2151algo[ch] <= 3 then
-   vv=(127-YM2151tl[ch,3])/2
-  elseif 4 == YM2151algo[ch] then
-   vv=((127-YM2151tl[ch,1])+(127-YM2151tl[ch,3]))/2
-  elseif 5 <= YM2151algo[ch] and YM2151algo[ch] <= 6 then
-   vv=((127-YM2151tl[ch,1])+(127-YM2151tl[ch,2])+(127-YM2151tl[ch,3]))/2
-  else
-   vv=((127-YM2151tl[ch,0])+(127-YM2151tl[ch,1])+(127-YM2151tl[ch,2])+(127-YM2151tl[ch,3]))/2
-  endif
   'ima wa ch0 dake saisei suru
-  'if kon then
-  if ch==0 and kon==&h0f then
-   freq ch, noteno[ch]+(YM2151kf[ch]/127)
-   'vol ch, 255
-   vol ch,vv
+  if kon==&h0f then
+   keyon[ch]=1
+   if ch==0 then vol ch,vbuf[ch]
+   'vol ch,vbuf[ch]
   else
+   keyon[ch]=0
    vol ch,0
   endif
+
   'for debug
   if ch==0 then
    if kon==&h0f then
-    print "KeyOn :",kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vv:'input a$
+    print "KeyOn :",hex$(fpos), kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vbuf[ch]:'input a$
    else
     'print "KeyOff:", kon, ch:'input a$
    endif
@@ -169,26 +162,51 @@ def subYM2151 cmd,aa,dd
  elseif &h28 <= aa and aa <= &h2f then
   'KeyCode(Octave(3bit)+Note(4bit)
   ch=aa-&h28
-  YM2151oct[ch]=(dd and &h70)>>4
+  YM2151oct[ch]=((dd and &h70)>>4)+0 '+1?
   YM2151noteno[ch]=dd and &h0F
   noteno[ch]=12*YM2151oct[ch]+YM2151noteno[ch] - (YM2151noteno[ch]>>2)
+  freq ch, noteno[ch]+(YM2151kf[ch]/63)
  elseif &h30 <= aa and aa <= &h37 then
   'Key Fraction(6bit)
   ch=aa-&h30
   YM2151kf[ch]=(dd and &hfc)>>2
+  freq ch, noteno[ch]+(YM2151kf[ch]/63)
  elseif &h20 <= aa and aa <= &h27 then
   'Algorithm(3bit)
   ch=aa-&h20
   YM2151algo[ch]=(dd and &h07)
-  if ch==0 then print "YM2151algo[", ch, "]=", YM2151algo[ch]
+  'if ch==0 then print "YM2151algo[", ch, "]=", YM2151algo[ch]
+  vbuf[ch]=calcvol(YM2151algo[ch], YM2151tl[ch,0], YM2151tl[ch,1], YM2151tl[ch,2], YM2151tl[ch,3])
+  if keyon[ch]!=0 then
+   vol ch,vbuf[ch]
+  endif
  elseif &h60 <= aa and aa <= &h7f then
   'Total Level(7bit)
   ch=(aa-&h60) mod 8
   op=(aa-&h60) div 8
   if op==1 then op=2 elseif op==2 then op=1
   YM2151tl[ch,op]=(dd and &h7f)
-  if ch==0 then print "YM2151tl[", ch, "][", op, "]=", YM2151tl[ch,op]
+  'if ch==0 then print "YM2151tl[", ch, "][", op, "]=", YM2151tl[ch,op]
+  vbuf[ch]=calcvol(YM2151algo[ch], YM2151tl[ch,0], YM2151tl[ch,1], YM2151tl[ch,2], YM2151tl[ch,3])
+  if keyon[ch]!=0 then
+   vol ch,vbuf[ch]
+  endif
  endif
+end
+
+'tl -> vol
+'korede iinoka?
+def calcvol(algo, tl0, tl1, tl2, tl3)
+ if 0 <= algo and algo <= 3 then
+  vv=(127-tl3)/2
+ elseif 4 == algo then
+  vv=((127-tl1)+(127-tl3))/2
+ elseif 5 == algo or algo == 6 then
+  vv=((127-tl1)+(127-tl2)+(127-tl3))/2
+ else
+  vv=((127-tl0)+(127-tl1)+(127-tl2)+(127-tl3))/2
+ endif
+ return vv
 end
 
 def note(no)
