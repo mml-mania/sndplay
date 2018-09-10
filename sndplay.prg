@@ -84,6 +84,21 @@ def vgmplay(vgmfile)
    dd=vgm[fpos]:inc fpos
    'print hex$(fpos), hex$(cmd), hex$(aa), hex$(dd)
    subYM2151 cmd,aa,dd
+  elseif cmd==&h4f or cmd==&h50 then
+   'not use(psg)
+   inc fpos
+  elseif &h30<=cmd and cmd<=&h3f then
+   'not use(dd)
+   inc fpos
+  elseif &h40<=cmd and cmd<=&hbf then
+   'not use(dd dd)
+   inc fpos,2
+  elseif &hc0<=cmd and cmd<=&hdf then
+   'not use(dd dd dd)
+   inc fpos,3
+  elseif &he0<=cmd and cmd<=&hff then
+   'not use(dd dd dd dd)
+   inc fpos,4
   else
    print "Undef fpos:"+str$(fpos)+" &H"+hex$(cmd)
    input a$
@@ -145,11 +160,9 @@ def subYM2151 cmd,aa,dd
   'for debug
   if ch==0 then
    if kon==&h0f then
-    print "KeyOn :",kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vv
-    'input a$
+    print "KeyOn :",kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vv:'input a$
    else
-    'print "KeyOff:", kon, ch
-    'input a$
+    'print "KeyOff:", kon, ch:'input a$
    endif
   endif
 
