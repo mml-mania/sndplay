@@ -54,7 +54,7 @@ def vgmplay(vgmfile)
  'read vgm start
  fpos=&h34+vgmdofst
  while fpos < (eof + &h03)
-  b=button(1,-1)
+  b=button(0,-1)
   if b==16 then break
   'print vgm[fpos]
   cmd=vgm[fpos]:inc fpos
