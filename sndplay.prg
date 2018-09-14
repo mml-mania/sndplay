@@ -12,6 +12,8 @@ dim keyon[8]
 dim vbuf[8]
 dim noteno[8]
 
+var Hch, Hinit=0, Hcnt, Hlow=0
+
 '0:HDMI 1:Jack
 audioout 1
 
@@ -86,6 +88,12 @@ def vgmplay(vgmfile)
    dd=vgm[fpos]:inc fpos
    'print hex$(fpos), hex$(cmd), hex$(aa), hex$(dd)
    subYM2151 cmd,aa,dd,fpos-3
+  elseif cmd==&hb9 then
+   'HuC6280, write value dd to register aa
+   aa=vgm[fpos]:inc fpos
+   dd=vgm[fpos]:inc fpos
+   'print hex$(fpos), hex$(cmd), hex$(aa), hex$(dd)
+   subHuC6280 cmd,aa,dd,fpos-3
   elseif cmd==&h4f or cmd==&h50 then
    'not use(psg)
    inc fpos
@@ -110,6 +118,17 @@ def vgmplay(vgmfile)
  for i = 0 to 7
   vol i,0
  next
+
+ 'debug print wavestr
+ for i = 0 to 7
+  'print "wave";i;":";
+  for j = 0 to 15
+   val=sound(&h80+i*16+j)
+   'print format$("%02x",sound(&h80+i*16+j));",";
+  next
+  'print ""
+ next
+
  return #TRUE
 end
 
@@ -140,11 +159,9 @@ def subYM2151 cmd,aa,dd,fpos
   kon=(dd and &h78)>>3
   ch=dd and &h07
 
-  'ima wa ch0 dake saisei suru
   if kon==&h0f then
    keyon[ch]=1
-   if ch==0 then vol ch,vbuf[ch]
-   'vol ch,vbuf[ch]
+   vol ch,vbuf[ch]
   else
    keyon[ch]=0
    vol ch,0
@@ -153,7 +170,7 @@ def subYM2151 cmd,aa,dd,fpos
   'for debug
   if ch==0 then
    if kon==&h0f then
-    print "KeyOn :",hex$(fpos), kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vbuf[ch]:'input a$
+    'print "KeyOn :",hex$(fpos), kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vbuf[ch]:'input a$
    else
     'print "KeyOff:", kon, ch:'input a$
    endif
@@ -191,7 +208,43 @@ def subYM2151 cmd,aa,dd,fpos
   if keyon[ch]!=0 then
    vol ch,vbuf[ch]
   endif
+ elseif aa==&h02 then
+  'wave select(sndplay only)
+  ch=dd and &hf0 >> 4
+  wavno=dd and &h0f
+  print "ch:",ch,"wavno:",wavno
+  sound 8*ch+5,wavno
  endif
+end
+
+def subHuC6280 cmd,aa,dd,fpos
+ if aa == &h00 then
+  'channel select
+  Hch = dd and &h07
+  'print "Hch:", Hch
+ elseif aa == &h06 then
+  'wave str
+  if Hch == 0 then
+   if Hcnt < 32 then
+    'initialize.ignore
+   else
+    wavno=(Hcnt-32) div 32
+    wavaddr=((Hcnt-32) div 2) mod 16
+    if (Hcnt mod 2) == 0 then
+     'upper->lower
+     sound &h80+(wavno*16)+wavaddr,dd
+    else
+     'lower->upper
+     wavval=sound(&h80+(wavno*16)+wavaddr)
+     sound &h80+(wavno*16)+wavaddr,wavval+dd*16
+    endif
+    'print "wavno:",wavno
+   endif
+   'print "Hch:",Hch,"Hcnt:",Hcnt,"wavno:",wavno,"dd:",dd
+   inc Hcnt
+  endif
+ endif
+
 end
 
 'tl -> vol
