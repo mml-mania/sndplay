@@ -3,16 +3,16 @@ VGMFILE$="test.vgm"
 'VGMFILE$="fz_shop.vgm"
 
 'hairetsu wo subroutine ni watasu houhou ga wakattara naosu
-dim YM2151oct[8]
-dim YM2151noteno[8]
-dim YM2151kf[8]
-dim YM2151algo[8]
-dim YM2151tl[8,4]
-dim keyon[8]
-dim vbuf[8]
-dim noteno[8]
+dim YM2151oct[16]
+dim YM2151noteno[16]
+dim YM2151kf[16]
+dim YM2151algo[16]
+dim YM2151tl[16,4]
+dim keyon[16]
+dim vbuf[16]
+dim noteno[16]
 
-var Hch, Hinit=0, Hcnt, Hlow=0
+var Hch, Hcnt
 
 '0:HDMI 1:Jack
 audioout 1
@@ -83,11 +83,16 @@ def vgmplay(vgmfile)
    'end of sound data
    break
   elseif cmd==&h54 then
-   'YM2151, write value dd to register aa
+   'YM2151 primary, write value dd to register aa
    aa=vgm[fpos]:inc fpos
    dd=vgm[fpos]:inc fpos
    'print hex$(fpos), hex$(cmd), hex$(aa), hex$(dd)
-   subYM2151 cmd,aa,dd,fpos-3
+   subYM2151 0,cmd,aa,dd,fpos-3
+  elseif cmd==&ha4 then
+   'YM2151 secondary, write value dd to register aa
+   aa=vgm[fpos]:inc fpos
+   dd=vgm[fpos]:inc fpos
+   subYM2151 1,cmd,aa,dd,fpos-3
   elseif cmd==&hb9 then
    'HuC6280, write value dd to register aa
    aa=vgm[fpos]:inc fpos
@@ -152,12 +157,12 @@ def vgmwait samples
  usleep samples/44.100*1000
 end
 
-def subYM2151 cmd,aa,dd,fpos
- 'print "YM2151:",cmd,aa,dd:input a$
+def subYM2151 chip,cmd,aa,dd,fpos
+ 'print "YM2151:",chip,cmd,aa,dd:input a$
  if aa == &h08 then
   'key-on/off
   kon=(dd and &h78)>>3
-  ch=dd and &h07
+  ch=(dd and &h07)+chip*8
 
   if kon==&h0f then
    keyon[ch]=1
@@ -178,19 +183,19 @@ def subYM2151 cmd,aa,dd,fpos
 
  elseif &h28 <= aa and aa <= &h2f then
   'KeyCode(Octave(3bit)+Note(4bit)
-  ch=aa-&h28
+  ch=(aa-&h28)+chip*8
   YM2151oct[ch]=((dd and &h70)>>4)+0 '+1?
   YM2151noteno[ch]=dd and &h0F
   noteno[ch]=12*YM2151oct[ch]+YM2151noteno[ch] - (YM2151noteno[ch]>>2)
   freq ch, noteno[ch]+(YM2151kf[ch]/63)
  elseif &h30 <= aa and aa <= &h37 then
   'Key Fraction(6bit)
-  ch=aa-&h30
+  ch=(aa-&h30)+chip*8
   YM2151kf[ch]=(dd and &hfc)>>2
   freq ch, noteno[ch]+(YM2151kf[ch]/63)
  elseif &h20 <= aa and aa <= &h27 then
   'Algorithm(3bit)
-  ch=aa-&h20
+  ch=(aa-&h20)+chip*8
   YM2151algo[ch]=(dd and &h07)
   'if ch==0 then print "YM2151algo[", ch, "]=", YM2151algo[ch]
   vbuf[ch]=calcvol(YM2151algo[ch], YM2151tl[ch,0], YM2151tl[ch,1], YM2151tl[ch,2], YM2151tl[ch,3])
@@ -199,7 +204,7 @@ def subYM2151 cmd,aa,dd,fpos
   endif
  elseif &h60 <= aa and aa <= &h7f then
   'Total Level(7bit)
-  ch=(aa-&h60) mod 8
+  ch=((aa-&h60) mod 8)+chip*8
   op=(aa-&h60) div 8
   if op==1 then op=2 elseif op==2 then op=1
   YM2151tl[ch,op]=(dd and &h7f)
@@ -210,7 +215,7 @@ def subYM2151 cmd,aa,dd,fpos
   endif
  elseif aa==&h02 then
   'wave select(sndplay only)
-  ch=dd and &hf0 >> 4
+  ch=(dd and &hf0 >> 4)+chip*8
   wavno=dd and &h0f
   print "ch:",ch,"wavno:",wavno
   sound 8*ch+5,wavno
@@ -226,7 +231,7 @@ def subHuC6280 cmd,aa,dd,fpos
   'wave str
   if Hch == 0 then
    if Hcnt < 32 then
-    'initialize.ignore
+    'initialize, ignore
    else
     wavno=(Hcnt-32) div 32
     wavaddr=((Hcnt-32) div 2) mod 16
