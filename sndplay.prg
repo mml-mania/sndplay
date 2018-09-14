@@ -13,6 +13,7 @@ dim vbuf[16]
 dim noteno[16]
 
 var Hch, Hcnt
+var fpos
 
 '0:HDMI 1:Jack
 audioout 1
@@ -87,12 +88,12 @@ def vgmplay(vgmfile)
    aa=vgm[fpos]:inc fpos
    dd=vgm[fpos]:inc fpos
    'print hex$(fpos), hex$(cmd), hex$(aa), hex$(dd)
-   subYM2151 0,cmd,aa,dd,fpos-3
+   subYM2151 0,cmd,aa,dd
   elseif cmd==&ha4 then
    'YM2151 secondary, write value dd to register aa
    aa=vgm[fpos]:inc fpos
    dd=vgm[fpos]:inc fpos
-   subYM2151 1,cmd,aa,dd,fpos-3
+   subYM2151 1,cmd,aa,dd
   elseif cmd==&hb9 then
    'HuC6280, write value dd to register aa
    aa=vgm[fpos]:inc fpos
@@ -120,7 +121,7 @@ def vgmplay(vgmfile)
   endif
  wend
  'fin
- for i = 0 to 7
+ for i = 0 to 15
   vol i,0
  next
 
@@ -157,7 +158,7 @@ def vgmwait samples
  usleep samples/44.100*1000
 end
 
-def subYM2151 chip,cmd,aa,dd,fpos
+def subYM2151 chip,cmd,aa,dd
  'print "YM2151:",chip,cmd,aa,dd:input a$
  if aa == &h08 then
   'key-on/off
@@ -175,7 +176,7 @@ def subYM2151 chip,cmd,aa,dd,fpos
   'for debug
   if ch==0 then
    if kon==&h0f then
-    'print "KeyOn :",hex$(fpos), kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vbuf[ch]:'input a$
+    'print "KeyOn :",hex$(fpos-3), kon, ch, YM2151oct[ch], YM2151noteno[ch], noteno[ch], note(noteno[ch]), YM2151kf[ch], vbuf[ch]:'input a$
    else
     'print "KeyOff:", kon, ch:'input a$
    endif
